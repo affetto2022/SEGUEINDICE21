@@ -1,0 +1,6 @@
+{
+  "name": "FAROL_TRADERS_FORCADOIBOVE",
+  "description": "Terminal profissional quantitativo de tendência, força da MM200, IFR 14, Farol Strength Score e contribuição dos ativos da carteira do Ibovespa e WINFUT.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

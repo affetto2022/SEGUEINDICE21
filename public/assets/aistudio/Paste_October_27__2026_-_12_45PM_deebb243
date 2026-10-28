@@ -1,0 +1,871 @@
+# FAROL TRADERS — MONITOR DE FORÇA DO IBOVESPA E WINFUT
+## Especificação técnica e prompt mestre para desenvolvimento no Google AI Studio
+
+Atue como engenheiro de software sênior, especialista em React, TypeScript, Python, APIs financeiras, análise quantitativa, indicadores técnicos e mercado brasileiro.
+
+Desenvolva uma aplicação web completa chamada **Farol Traders — Monitor de Força do IBOVESPA e WINFUT**.
+
+O objetivo é monitorar todas as ações que compõem a carteira vigente do Ibovespa, calcular sua tendência e força em múltiplas periodicidades, avaliar sua participação no índice e comparar o comportamento coletivo das ações com o IBOV e o WINFUT.
+
+O projeto deve ser funcional, preparado para implantação online e construído de maneira modular, permitindo substituir ou acrescentar provedores de dados no futuro sem reescrever os cálculos e a interface.
+
+Não entregue somente um protótipo visual. Entregue código executável, indicadores calculados a partir de dados válidos, tratamento de erros, documentação e instruções de implantação.
+
+---
+
+# 1. CONFIGURAÇÕES OBRIGATÓRIAS
+
+Adotar as seguintes decisões de projeto:
+
+- Periodicidades: 5 minutos, 15 minutos, 60 minutos e diário.
+- Fonte de dados inicial: priorizar provedores gratuitos.
+- Evolução futura: permitir integração com provedores pagos e APIs de corretoras.
+- Atualização: manual e automática.
+- Indicadores centrais: MM200, inclinação da MM200, distância percentual da média, IFR 14 e Farol Strength Score.
+- Ativos: composição vigente do Ibovespa, obtida de fonte confiável ou importada por CSV.
+- Comparação: ações individuais, cesta ponderada, IBOV e WINFUT.
+- Idioma: português brasileiro.
+- Fuso horário da interface: America/Sao_Paulo.
+- Identidade visual: Farol Traders, com fundo escuro, cabeçalho azul-escuro, detalhes dourados, verde comprador e vermelho vendedor.
+- Arquitetura: frontend React + TypeScript e backend Python + FastAPI.
+- Persistência: PostgreSQL na implantação online, com possibilidade de SQLite no ambiente local de desenvolvimento.
+- Gráficos: Apache ECharts ou biblioteca equivalente.
+- Exportação: CSV.
+- Segurança: segredos e chaves de API exclusivamente no backend.
+
+# 2. OBJETIVO OPERACIONAL
+
+O sistema deverá responder visualmente às seguintes perguntas:
+
+1. Quais ações estão em tendência de alta ou baixa?
+2. Quais estão acelerando ou perdendo força em relação à MM200?
+3. Quais apresentam divergência entre a tendência principal e o movimento de curto prazo?
+4. Quais estão sobrecompradas ou sobrevendidas pelo IFR?
+5. Quais ações de maior peso estão fortalecendo ou enfraquecendo o Ibovespa?
+6. O movimento do WINFUT está sendo confirmado pelas ações que compõem o índice?
+7. Existe divergência entre WINFUT, IBOV e cesta ponderada das ações?
+8. Quais ações apresentam maior contribuição positiva ou negativa estimada para o índice?
+9. A força agregada do mercado está aumentando ou diminuindo?
+10. Quais ativos merecem atenção devido à combinação de peso, tendência e força?
+
+O painel deve apresentar fatos calculados e interpretações técnicas. Não deve apresentar previsões como certezas nem emitir ordens de compra ou venda automaticamente.
+
+# 3. UNIVERSO DE ATIVOS E CARTEIRA DO IBOVESPA
+
+Criar um módulo de composição da carteira.
+
+A composição vigente deve ser obtida preferencialmente de fonte oficial da B3, quando tecnicamente acessível, ou de fonte alternativa documentada e confiável.
+
+Permitir importação de arquivo CSV quando não houver integração automática viável.
+
+Cada registro deverá conter, quando disponível:
+
+- Ticker.
+- Nome da empresa.
+- Peso percentual.
+- Data de referência da carteira.
+- Início e fim da vigência.
+- Fonte da informação.
+
+Requisitos:
+
+- Não manter uma lista fixa de ativos como se fosse a carteira vigente.
+- Atualizar a composição quando houver uma nova carteira válida.
+- Manter histórico das composições anteriores.
+- Validar duplicidades e símbolos incorretos.
+- Informar a data de referência dos pesos.
+- Exibir a cobertura dos ativos com cotações válidas.
+- Diferenciar ações sem dados de ações com variação igual a zero.
+- Não preencher pesos ausentes com valores inventados.
+- Permitir adicionar temporariamente um ativo à watchlist sem incluí-lo artificialmente na carteira do índice.
+
+A carteira deverá ser tratada como um universo dinâmico.
+
+# 4. ARQUITETURA DE DADOS
+
+Criar uma camada independente de provedores financeiros, com uma interface comum para todos eles.
+
+Separar as seguintes responsabilidades:
+
+A. Composição do Ibovespa.
+B. Cotações históricas.
+C. Cotações intradiárias.
+D. Cotações do IBOV.
+E. Cotações do WINFUT.
+F. Cálculo dos indicadores.
+G. Persistência e histórico.
+H. API do dashboard.
+I. Interface visual.
+
+Criar uma estrutura semelhante a:
+
+- frontend/
+- backend/
+- backend/providers/
+- backend/indicators/
+- backend/services/
+- backend/api/
+- backend/models/
+- backend/tests/
+- migrations/
+- docs/
+
+Criar uma interface abstrata de provedor com métodos equivalentes a:
+
+- get_market_status()
+- get_ibov_components()
+- get_ohlcv(symbol, timeframe, start, end)
+- get_quote(symbol)
+- get_win_future_quote()
+- get_provider_metadata()
+
+Os métodos poderão ser adaptados à API real escolhida, mas todos os provedores deverão retornar uma estrutura normalizada.
+
+Estrutura normalizada de candle:
+
+- symbol
+- timeframe
+- timestamp
+- open
+- high
+- low
+- close
+- volume
+- is_closed
+- source
+- fetched_at
+
+Validar a consistência OHLCV antes de calcular indicadores.
+
+Não presumir que todos os provedores disponibilizam as mesmas periodicidades, ativos ou históricos.
+
+# 5. ESTRATÉGIA DE FONTES DE DADOS
+
+## Fase inicial — gratuita
+
+Avaliar provedores que disponibilizem dados históricos e intradiários para o mercado brasileiro.
+
+Considerar, conforme disponibilidade e termos de utilização:
+
+- Yahoo Finance ou bibliotecas de acesso compatíveis, para histórico e cotações que efetivamente estiverem disponíveis.
+- Arquivos públicos e informações oficiais da B3 para composição e pesos do índice.
+- Outros provedores gratuitos com documentação e acesso permitido.
+- CSV de candles para desenvolvimento, testes e contingência.
+
+Não presumir que o Yahoo Finance ou qualquer fonte gratuita fornece todas as ações, todas as periodicidades e cotações em tempo real do WINFUT.
+
+Validar previamente os símbolos, a cobertura, a granularidade, a retenção histórica e as limitações de requisição de cada fonte.
+
+Não utilizar scraping que viole os termos de uso do provedor.
+
+## Fase futura — provedores pagos
+
+Preparar adaptadores para permitir a substituição por APIs financeiras pagas ou APIs de corretoras.
+
+A integração paga deverá exigir apenas a configuração do provedor e de suas credenciais no backend, mantendo os mesmos modelos de dados e cálculos.
+
+Não codificar a aplicação de modo que dependa exclusivamente de um único fornecedor.
+
+## Dados indisponíveis
+
+Quando não houver cotação válida:
+
+- Mostrar indisponibilidade.
+- Manter o último valor válido, identificando sua data e hora.
+- Não substituir valores por zero.
+- Não gerar indicadores artificiais.
+- Não incluir o ativo nos agregados sem informar a ausência.
+- Registrar a falha no log.
+
+Cada conjunto de dados deve exibir a fonte, o horário de referência e o horário de obtenção.
+
+# 6. ATUALIZAÇÃO MANUAL E AUTOMÁTICA
+
+Implementar:
+
+1. Botão "Atualizar agora".
+2. Configuração do intervalo de atualização automática.
+3. Horário da última atualização bem-sucedida.
+4. Indicador de conexão com cada provedor.
+5. Contador de ativos atualizados e ativos com falha.
+6. Exibição de dados atrasados.
+7. Mensagens de erro legíveis.
+8. Cache e controle de concorrência.
+9. Retentativas limitadas com espera progressiva.
+10. Histórico das atualizações.
+
+Intervalos configuráveis iniciais:
+
+- 5 minutos: consultar a cada 60 segundos, se o provedor permitir.
+- 15 minutos: consultar a cada 60 segundos, se permitido.
+- 60 minutos: consultar a cada 2 a 5 minutos, se permitido.
+- Diário: consultar a cada 15 a 30 minutos durante a sessão, quando necessário.
+
+Esses valores são configurações iniciais, não garantias de atualização. Respeitar rigorosamente os limites de cada provedor.
+
+A atualização de uma periodicidade não deve forçar requisições redundantes para todas as outras.
+
+A aplicação deverá identificar candles ainda abertos e evitar tratá-los como fechados.
+
+Exibir dois estados distintos:
+
+- Último preço disponível.
+- Último candle fechado utilizado para os indicadores.
+
+Implementar um botão para atualização integral e, quando possível, botões para atualizar somente a cotação, a carteira ou os indicadores.
+
+# 7. MÚLTIPLAS PERIODICIDADES
+
+Implementar quatro conjuntos independentes de indicadores:
+
+- 5m: monitoramento intradiário de curto prazo.
+- 15m: confirmação do movimento intradiário.
+- 60m: tendência intradiária mais ampla.
+- Diário: tendência principal de médio prazo.
+
+Cada periodicidade deverá manter sua própria série OHLCV, MM200, IFR e histórico de score.
+
+Não calcular uma MM200 de 5 minutos utilizando candles diários. Não converter candles de uma periodicidade em outra sem uma regra explícita de agregação.
+
+## Regras da MM200
+
+Utilizar SMA de 200 períodos sobre o fechamento dos candles.
+
+São necessários pelo menos 200 candles válidos para calcular a média.
+
+Exemplos:
+
+- MM200 de 5m: 200 candles de 5 minutos.
+- MM200 de 15m: 200 candles de 15 minutos.
+- MM200 de 60m: 200 candles de 60 minutos.
+- MM200 diário: 200 candles diários.
+
+Solicitar histórico adicional para inicialização, validação e aquecimento dos indicadores.
+
+Se o histórico for insuficiente, mostrar "Histórico insuficiente para MM200", sem criar valores artificiais.
+
+## Seleção de periodicidade
+
+Disponibilizar seletor global com:
+
+- 5 minutos.
+- 15 minutos.
+- 60 minutos.
+- Diário.
+- Multiperíodo.
+
+No modo multiperíodo, exibir quatro colunas de indicadores para cada ativo e uma classificação consolidada.
+
+A classificação consolidada deverá ser configurável e considerar:
+
+- Tendência diária.
+- Tendência de 60 minutos.
+- Força de 15 minutos.
+- Direção e força de 5 minutos.
+
+A tendência diária deve ter maior peso como contexto principal, sem impedir que o painel identifique reversões intradiárias.
+
+# 8. CÁLCULOS TÉCNICOS
+
+## 8.1 Distância percentual da MM200
+
+Calcular:
+
+Distância (%) = ((Fechamento / SMA200) - 1) × 100
+
+Interpretar:
+
+- Distância positiva: preço acima da média.
+- Distância negativa: preço abaixo da média.
+- Distância próxima de zero: preço próximo da média.
+
+Exibir a distância percentual com sinal e duas casas decimais.
+
+## 8.2 Inclinação da MM200
+
+Calcular a variação percentual da SMA200 em relação ao seu valor de N candles anteriores.
+
+Fórmula:
+
+Inclinação (%) = ((SMA200 atual / SMA200 de N candles atrás) - 1) × 100
+
+Permitir configurar N separadamente para cada periodicidade.
+
+Classificar a inclinação em:
+
+- Ascendente.
+- Descendente.
+- Praticamente horizontal.
+
+Os limites deverão ser configuráveis e, quando aplicável, normalizados para a periodicidade.
+
+## 8.3 Evolução da distância da MM200
+
+Calcular a mudança da distância percentual em relação a uma janela anterior.
+
+Delta da distância = Distância atual - Distância de N candles atrás.
+
+Interpretação:
+
+- Preço acima da MM200 e delta positivo: afastamento para cima.
+- Preço acima da MM200 e delta negativo: aproximação da média.
+- Preço abaixo da MM200 e delta negativo: afastamento para baixo.
+- Preço abaixo da MM200 e delta positivo: aproximação da média.
+
+Essa interpretação deve ser combinada com a inclinação da MM200, não utilizada isoladamente.
+
+## 8.4 Classificação de tendência
+
+Criar os estados:
+
+- ALTA FORTE.
+- ALTA PERDENDO FORÇA.
+- ALTA EM ACELERAÇÃO.
+- BAIXA FORTE.
+- BAIXA PERDENDO FORÇA.
+- BAIXA EM ACELERAÇÃO.
+- NEUTRO.
+- TRANSIÇÃO.
+- DADOS INSUFICIENTES.
+
+Exemplos de regras:
+
+ALTA FORTE:
+Preço acima da MM200, inclinação positiva e distância positiva estável ou crescente.
+
+ALTA PERDENDO FORÇA:
+Preço acima da MM200, mas distância diminuindo de maneira relevante.
+
+ALTA EM ACELERAÇÃO:
+Preço acima da MM200, inclinação positiva e aumento consistente da distância positiva.
+
+BAIXA FORTE:
+Preço abaixo da MM200, inclinação negativa e distância negativa estável ou aumentando em módulo.
+
+BAIXA PERDENDO FORÇA:
+Preço abaixo da MM200, mas distância negativa diminuindo em módulo.
+
+BAIXA EM ACELERAÇÃO:
+Preço abaixo da MM200, inclinação negativa e aumento consistente da distância negativa em módulo.
+
+NEUTRO:
+Preço próximo da MM200 ou ausência de direção consistente.
+
+TRANSIÇÃO:
+Combinação contraditória entre preço, inclinação e mudança de distância.
+
+Utilizar limites configuráveis e impedir classificações categóricas quando os dados forem insuficientes.
+
+## 8.5 IFR de 14 períodos
+
+Implementar o RSI de Wilder com 14 períodos.
+
+Classificação:
+
+- IFR acima de 70: sobrecompra.
+- IFR entre 60 e 70: força compradora elevada.
+- IFR entre 40 e 60: zona intermediária.
+- IFR entre 30 e 40: pressão vendedora elevada.
+- IFR abaixo de 30: sobrevenda.
+
+Permitir configurar o período e os limites.
+
+Não interpretar sobrecompra automaticamente como venda nem sobrevenda como compra.
+
+## 8.6 Retorno percentual
+
+Calcular a variação do ativo para cada periodicidade e para o dia.
+
+Distinguir claramente:
+
+- Retorno do candle.
+- Retorno em relação ao fechamento anterior.
+- Variação diária.
+- Retorno acumulado do período selecionado.
+
+Não confundir essas métricas.
+
+# 9. FAROL STRENGTH SCORE
+
+Criar um indicador proprietário de força, variando entre -100 e +100.
+
+O score deve combinar:
+
+1. Posição do preço em relação à MM200.
+2. Inclinação da MM200.
+3. Mudança da distância da MM200.
+4. Retorno percentual.
+5. IFR.
+6. Consistência direcional do movimento.
+
+Normalizar os componentes antes de combiná-los.
+
+Aplicar limites aos valores extremos e permitir configurar os pesos.
+
+Utilizar, inicialmente, pesos de referência:
+
+- Posição em relação à MM200: 20%.
+- Inclinação da MM200: 20%.
+- Evolução da distância: 20%.
+- Retorno normalizado: 15%.
+- IFR: 10%.
+- Consistência direcional: 15%.
+
+Os pesos deverão somar 100% e ser validados no backend.
+
+O IFR deverá contribuir de forma contextual, evitando que a sobrecompra reduza automaticamente um movimento de alta consistente.
+
+Normalizar os retornos e as distâncias para evitar que ativos mais voláteis dominem a pontuação.
+
+Classificação inicial:
+
+- +60 a +100: força compradora forte.
+- +20 a +59: força compradora moderada.
+- -19 a +19: neutro ou indefinido.
+- -59 a -20: força vendedora moderada.
+- -100 a -60: força vendedora forte.
+
+Se faltar um componente, não assumir que ele vale zero. Recalcular com os componentes disponíveis apenas quando a política de dados permitir, normalizando os pesos válidos e mostrando a cobertura do score.
+
+Se a cobertura mínima não for atingida, retornar "Score indisponível".
+
+Criar scores independentes por periodicidade e um score consolidado multiperíodo.
+
+# 10. CONSOLIDAÇÃO MULTIPERÍODO
+
+Criar uma classificação que permita distinguir contexto principal e movimento operacional.
+
+Pesos iniciais configuráveis:
+
+- Diário: 40%.
+- 60 minutos: 30%.
+- 15 minutos: 20%.
+- 5 minutos: 10%.
+
+Score consolidado = soma dos scores válidos de cada periodicidade multiplicados por seus pesos normalizados.
+
+Se faltar uma periodicidade, recalcular apenas se a cobertura mínima configurada for atendida. Mostrar explicitamente quais períodos estão disponíveis.
+
+Criar sinalizadores de alinhamento:
+
+- ALINHAMENTO COMPRADOR: maioria das periodicidades válidas com força positiva.
+- ALINHAMENTO VENDEDOR: maioria das periodicidades válidas com força negativa.
+- CONFLITO MULTIPERÍODO: direção principal divergente do curto prazo.
+- REVERSÃO EM OBSERVAÇÃO: mudança relevante de direção sem confirmação suficiente.
+- DADOS INSUFICIENTES.
+
+Exemplo:
+"Diário em alta, 60m em alta, 15m perdendo força e 5m em baixa."
+
+Esse exemplo deve gerar um estado de conflito ou correção intradiária, não uma inversão automática da tendência diária.
+
+# 11. DASHBOARD PRINCIPAL
+
+Criar cards para:
+
+- IBOV: preço, variação e horário.
+- WINFUT: preço, variação, contrato e horário.
+- Percentual da carteira acima da MM200 diária.
+- Percentual da carteira abaixo da MM200 diária.
+- Quantidade de ações com força compradora.
+- Quantidade de ações com força vendedora.
+- Quantidade de ações em sobrecompra.
+- Quantidade de ações em sobrevenda.
+- Score agregado ponderado do mercado.
+- Alinhamento entre ações, IBOV e WINFUT.
+- Cobertura dos ativos com dados válidos.
+- Horário da última atualização bem-sucedida.
+
+Todos os cards devem ser calculados a partir de dados reais disponíveis.
+
+Se os dados não estiverem disponíveis, mostrar "Indisponível" ou "Aguardando dados". Nunca mostrar zero como substituto de uma cotação desconhecida.
+
+# 12. GRÁFICOS INTERATIVOS
+
+## Gráfico A — Mapa de força
+
+Exibir todas as ações em um mapa de calor.
+
+Cores:
+- Verde intenso: força compradora forte.
+- Verde suave: força compradora moderada.
+- Cinza: neutro.
+- Vermelho suave: força vendedora moderada.
+- Vermelho intenso: força vendedora forte.
+
+Permitir colorir por score, retorno, distância da MM200 ou contribuição estimada.
+
+Permitir selecionar a periodicidade.
+
+## Gráfico B — Peso versus força
+
+Eixo X: peso percentual do ativo.
+
+Eixo Y: Farol Strength Score.
+
+Tamanho do ponto: peso no índice.
+
+Cor: força compradora ou vendedora.
+
+Ao selecionar um ponto, abrir os detalhes da ação.
+
+## Gráfico C — Contribuições positivas e negativas
+
+Mostrar ranking de ativos com maior contribuição estimada para o IBOV.
+
+Separar contribuições positivas e negativas.
+
+Exibir ticker, peso, retorno e contribuição estimada.
+
+## Gráfico D — IBOV versus WINFUT versus cesta
+
+Comparar séries normalizadas para uma base comum.
+
+Criar duas modalidades:
+
+1. Variação percentual acumulada desde o início do período.
+2. Retorno percentual acumulado desde o fechamento de referência.
+
+Alinhar os timestamps e exibir a cobertura de cada série.
+
+Não comparar diretamente pontos do IBOV com pontos do WINFUT.
+
+## Gráfico E — Distribuição da tendência
+
+Mostrar quantidade e percentual de ativos em cada estado técnico.
+
+Permitir alternar entre contagem simples e ponderação pelo peso da carteira.
+
+## Gráfico F — Força agregada ao longo do tempo
+
+Construir uma série temporal de força agregada, ponderada pelos pesos válidos da carteira.
+
+Mostrar:
+- Força compradora agregada.
+- Força vendedora agregada.
+- Evolução do score.
+- Divergências com WINFUT.
+- Mudanças relevantes de alinhamento.
+
+# 13. PESO E CONTRIBUIÇÃO PARA O IBOVESPA
+
+Criar uma tabela completa e ordenável com:
+
+- Ranking.
+- Ticker.
+- Empresa.
+- Preço.
+- Retorno diário.
+- Peso percentual.
+- MM200 diária.
+- Distância da MM200.
+- Inclinação da MM200.
+- IFR.
+- Score diário.
+- Score de 60m.
+- Score de 15m.
+- Score de 5m.
+- Score consolidado.
+- Tendência principal.
+- Estado do movimento.
+- Contribuição estimada.
+- Cobertura e horário dos dados.
+
+## Fórmula de contribuição aproximada
+
+Contribuição em pontos percentuais ≈ peso percentual na carteira × retorno percentual do ativo / 100.
+
+Exemplo ilustrativo:
+
+Peso = 10%.
+Retorno = +2%.
+Contribuição estimada = +0,20 ponto percentual.
+
+A contribuição estimada deve utilizar pesos compatíveis com a data de referência e retornos do mesmo intervalo temporal.
+
+A soma das contribuições pode divergir do retorno oficial do IBOV devido a rebalanceamentos, ajustes metodológicos, eventos corporativos, horários diferentes e dados incompletos.
+
+Exibir:
+- Contribuição estimada.
+- Cobertura ponderada dos ativos.
+- Quantidade de ativos válidos.
+- Data de referência da carteira.
+- Aviso quando o cálculo não puder ser considerado representativo.
+
+Não afirmar que a estimativa é o cálculo oficial da B3.
+
+## Separar duas análises
+
+A. Contribuição para a variação diária do índice.
+
+B. Pressão potencial intradiária.
+
+A análise intradiária deve usar retornos calculados a partir de uma referência temporal comum. Não multiplicar indiscriminadamente pesos diários por retornos de candles com horários diferentes.
+
+# 14. COMPARAÇÃO COM WINFUT
+
+O WINFUT é um contrato futuro e deve ser tratado separadamente do índice à vista.
+
+Implementar um módulo específico para o futuro com:
+
+- Símbolo do contrato.
+- Vencimento.
+- Preço.
+- Variação.
+- Timestamp.
+- Fonte.
+- Estado de continuidade da série.
+
+Permitir selecionar o contrato negociado e registrar sua data de vencimento.
+
+Não concatenar contratos de vencimentos diferentes sem uma metodologia explícita de rolagem.
+
+Quando houver uma série contínua ajustada fornecida por um provedor, identificar sua origem e método de ajuste.
+
+Comparar:
+- Direção do WINFUT.
+- Score da cesta ponderada.
+- Score das ações de maior peso.
+- Retorno do IBOV.
+- Amplitude de mercado.
+- Divergências temporais.
+
+Criar um painel de confirmação:
+
+- WINFUT sobe e cesta fortalece.
+- WINFUT sobe e cesta enfraquece.
+- WINFUT cai e cesta enfraquece.
+- WINFUT cai e cesta fortalece.
+- Mercado sem alinhamento claro.
+
+Esses estados devem ser descritivos, não sinais automáticos de operação.
+
+# 15. DETALHAMENTO INDIVIDUAL DO ATIVO
+
+Ao clicar no ticker, abrir uma tela com:
+
+- Candles.
+- MM200.
+- Preço atual.
+- IFR.
+- Distância da média.
+- Inclinação.
+- Retorno.
+- Score.
+- Peso na carteira.
+- Contribuição estimada.
+- Histórico de score.
+- Comparação das quatro periodicidades.
+- Comparação com IBOV e WINFUT.
+- Horários e fonte dos dados.
+
+Gerar um resumo técnico a partir dos valores calculados.
+
+Exemplo:
+"O ativo está acima da MM200 diária, mas a distância em relação à média diminuiu. O contexto principal continua positivo, enquanto o movimento intradiário apresenta desaceleração."
+
+Nunca apresentar texto analítico que contradiga os dados efetivamente calculados.
+
+# 16. BANCO DE DADOS
+
+Criar tabelas para:
+
+- assets
+- index_compositions
+- historical_quotes
+- indicator_snapshots
+- market_snapshots
+- provider_status
+- update_logs
+- user_settings
+
+Armazenar timestamps com referência temporal inequívoca, preferencialmente em UTC, convertendo para America/Sao_Paulo na interface.
+
+Registrar a origem e a data de referência dos dados.
+
+Criar índices para consultas por ativo, periodicidade e timestamp.
+
+Evitar duplicar candles com a mesma chave lógica.
+
+Preservar os snapshots históricos para permitir comparar a força atual com a força anterior.
+
+Não depender exclusivamente da memória do frontend para manter o histórico.
+
+# 17. BACKEND E API
+
+Implementar endpoints equivalentes a:
+
+GET /api/health
+
+GET /api/assets
+
+GET /api/index/composition
+
+GET /api/market/summary
+
+GET /api/market/quotes
+
+GET /api/market/strength
+
+GET /api/market/contributions
+
+GET /api/assets/{ticker}
+
+GET /api/assets/{ticker}/candles
+
+GET /api/assets/{ticker}/indicators
+
+GET /api/history/strength
+
+POST /api/refresh
+
+GET /api/providers/status
+
+GET /api/settings
+
+PUT /api/settings
+
+Adaptar os endpoints quando necessário, documentando os contratos de entrada e saída.
+
+O endpoint de atualização deverá aceitar filtros opcionais de ativo e periodicidade, respeitando limites de acesso.
+
+Validar entradas, normalizar erros e não retornar segredos nas respostas.
+
+Criar documentação OpenAPI.
+
+# 18. FRONTEND
+
+Construir uma interface responsiva com:
+
+- Dashboard principal.
+- Mapa de força.
+- Ranking de contribuição.
+- Tabela de ativos.
+- Detalhes do ativo.
+- Comparação multiperíodo.
+- Histórico.
+- Configurações.
+- Status das fontes de dados.
+
+Filtros:
+- Periodicidade.
+- Tendência.
+- Score.
+- IFR.
+- Distância da MM200.
+- Peso mínimo.
+- Contribuição positiva ou negativa.
+- Busca por ticker.
+
+Permitir:
+- Ordenação por coluna.
+- Exportação para CSV.
+- Atualização manual.
+- Atualização automática configurável.
+- Alternância entre visão consolidada e individual.
+
+Exibir mensagens claras de carregamento, ausência de dados e erro.
+
+Não renderizar gráficos enganosos com arrays vazios preenchidos artificialmente.
+
+# 19. TESTES E VALIDAÇÃO
+
+Criar testes automatizados para:
+
+1. Cálculo da SMA200.
+2. Cálculo do IFR de Wilder.
+3. Distância percentual.
+4. Inclinação da MM200.
+5. Mudança da distância.
+6. Classificação de tendência.
+7. Score individual.
+8. Score multiperíodo.
+9. Normalização de pesos.
+10. Contribuição estimada.
+11. Ausência de dados.
+12. Histórico insuficiente.
+13. Candle incompleto.
+14. Duplicação de candles.
+15. Falha de provedor.
+16. Divergência de timestamps.
+17. Troca de contrato do WINFUT.
+
+Utilizar dados sintéticos apenas nos testes, claramente separados dos dados de mercado.
+
+Testar os resultados dos indicadores contra exemplos conhecidos e implementações de referência.
+
+Verificar se os indicadores permanecem consistentes quando a aplicação é reiniciada.
+
+# 20. IMPLANTAÇÃO
+
+Preparar a aplicação para execução local e publicação online.
+
+Entregar:
+
+- Código completo do frontend.
+- Código completo do backend.
+- requirements.txt ou pyproject.toml.
+- package.json.
+- Arquivo .env.example sem segredos reais.
+- Arquivos de configuração do banco.
+- Scripts de inicialização.
+- Migrações.
+- Testes.
+- README em português.
+- Instruções para configurar o provedor gratuito.
+- Instruções para configurar uma fonte paga futuramente.
+- Instruções para publicar frontend e backend.
+- Instruções para configurar variáveis de ambiente.
+- Instruções para diagnosticar erros de conexão e cotações zeradas.
+
+A implantação online deverá utilizar HTTPS, proteger as credenciais e permitir que a interface seja acessada de diferentes dispositivos.
+
+Verificar se a hospedagem escolhida suporta processos persistentes, agendamento, banco de dados e requisições externas. Não depender de tarefas em segundo plano que sejam suspensas quando o serviço fica inativo.
+
+# 21. CRITÉRIOS DE ACEITAÇÃO
+
+A primeira versão somente deverá ser considerada concluída quando:
+
+- A composição da carteira puder ser atualizada ou importada.
+- Os ativos estiverem associados aos símbolos corretos.
+- Os quatro períodos estiverem implementados separadamente.
+- A MM200 e o IFR forem calculados com dados suficientes.
+- O score apresentar cobertura e metodologia verificáveis.
+- A tabela de pesos funcionar.
+- A contribuição estimada estiver identificada como estimativa.
+- O IBOV e o WINFUT forem diferenciados corretamente.
+- A atualização manual funcionar.
+- A atualização automática respeitar os limites do provedor.
+- O sistema identificar dados atrasados e indisponíveis.
+- Os gráficos e filtros utilizarem dados reais.
+- A exportação CSV funcionar.
+- Os testes automatizados passarem.
+- A implantação estiver documentada.
+
+Se algum requisito depender de uma fonte de dados indisponível, implementar a estrutura de integração, documentar a limitação e informar exatamente o que falta para ativar a funcionalidade.
+
+Não declarar que o sistema está funcionando com dados reais sem executar testes de integração que confirmem essa condição.
+
+# 22. ORDEM DE DESENVOLVIMENTO
+
+Trabalhar em etapas:
+
+ETAPA 1 — Arquitetura, estrutura de arquivos, modelos de dados e protótipo funcional.
+
+ETAPA 2 — Integração do primeiro provedor gratuito e validação dos símbolos.
+
+ETAPA 3 — Implementação das quatro periodicidades e indicadores técnicos.
+
+ETAPA 4 — Score individual e consolidação multiperíodo.
+
+ETAPA 5 — Tabela de pesos, contribuição e comparação com WINFUT.
+
+ETAPA 6 — Gráficos, filtros, histórico e atualização automática.
+
+ETAPA 7 — Testes, documentação e implantação online.
+
+Comece pela ETAPA 1 e prossiga até concluir a primeira versão executável. Não pare apenas na apresentação da arquitetura.
+
+Se houver limite de contexto ou de geração de código, divida a implementação em etapas identificadas, mantenha os arquivos consistentes e informe quais arquivos foram concluídos e quais faltam.
+
+O produto final deverá ser um terminal profissional de análise de força do mercado brasileiro, com a identidade Farol Traders e foco em tendência, participação, aceleração, perda de força e alinhamento entre ações, Ibovespa e WINFUT.
